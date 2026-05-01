@@ -25,10 +25,7 @@ const TOKEN_MAP: Record<string, string> = {
   Z: 'ZZ',
 };
 
-const TOKEN_PATTERN = new RegExp(
-  `\\[([^\\]]+)\\]|Do|${Object.keys(TOKEN_MAP).join('|')}`,
-  'g'
-);
+const TOKEN_PATTERN = new RegExp(`\\[([^\\]]+)\\]|Do|${Object.keys(TOKEN_MAP).join('|')}`, 'g');
 const ORDINAL_MARKER = '__ord__';
 const ORDINAL_MARKER_PATTERN = new RegExp(`(\\d+)${ORDINAL_MARKER}`, 'g');
 const ORDINAL_SUFFIXES = ['th', 'st', 'nd', 'rd'] as const;
@@ -54,10 +51,7 @@ export function getOrdinal(day: number): string {
   return ORDINAL_SUFFIXES[(value - 20) % 10] ?? ORDINAL_SUFFIXES[value] ?? 'th';
 }
 
-export function formatWithOrdinal(
-  luxonDateTime: DateTime,
-  momentFormat: string
-): string {
+export function formatWithOrdinal(luxonDateTime: DateTime, momentFormat: string): string {
   const luxonFormat = convertMomentToLuxonWithOrdinal(momentFormat);
   const formatted = luxonDateTime.toFormat(luxonFormat);
 

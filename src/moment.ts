@@ -1,5 +1,6 @@
 import { DateTime, Duration } from 'luxon';
-import type { DurationUnit, DateTimeUnit, DurationLikeObject } from 'luxon';
+import type { DateTimeUnit, DurationLikeObject, DurationUnit } from 'luxon';
+
 import { formatWithOrdinal } from './format';
 
 type MomentUnit =
@@ -14,6 +15,7 @@ type MomentUnit =
   | 'M'
   | 'weeks'
   | 'week'
+  | 'isoWeek'
   | 'w'
   | 'days'
   | 'day'
@@ -53,32 +55,12 @@ type InputObject = Partial<{
   millisecond: number;
 }>;
 
-type MomentInput =
-  | MomentLike
-  | DateTime
-  | Date
-  | number
-  | string
-  | InputObject
-  | undefined
-  | null;
-
+export type MomentInput = MomentLike | DateTime | Date | number | string | InputObject | undefined | null;
 type MomentFormat = string | string[];
 type FormatArg = string | undefined;
-type UnitGetter =
-  | MomentUnit
-  | DateTimeUnit
-  | 'date'
-  | 's'
-  | 'm'
-  | 'h'
-  | 'd'
-  | 'M'
-  | 'y'
-  | 'w';
+type UnitGetter = MomentUnit | DateTimeUnit | 'date' | 's' | 'm' | 'h' | 'd' | 'M' | 'y' | 'w';
 
 type LocaleUnit = 'long' | 'short' | 'narrow';
-
 type DiffUnit = DurationUnit | DurationUnit[];
 
 type MomentDurationInput =
@@ -126,7 +108,6 @@ export interface MomentLike {
   local(): MomentLike;
   tz(zone: string, keepLocalTime?: boolean): MomentLike;
   clone(): MomentLike;
-
   year(value?: number): number | MomentLike;
   month(value?: number): number | MomentLike;
   date(value?: number): number | MomentLike;
@@ -139,13 +120,11 @@ export interface MomentLike {
   minute(value?: number): number | MomentLike;
   second(value?: number): number | MomentLike;
   millisecond(value?: number): number | MomentLike;
-
   isValid(): boolean;
   isBefore(input: MomentInput, unit?: DateTimeUnit): boolean;
   isAfter(input: MomentInput, unit?: DateTimeUnit): boolean;
   isSame(input: MomentInput, unit?: DateTimeUnit): boolean;
   diff(input: MomentInput, unit?: DiffUnit): number;
-
   toDate(): Date;
   toISOString(): string | null;
   toJSON(): string | null;
@@ -157,14 +136,12 @@ export interface MomentLike {
   format(template?: FormatArg): string;
   fromNow(withoutSuffix?: boolean): string | null;
   toNow(withoutSuffix?: boolean): string | null;
+  from(input: MomentInput, withoutSuffix?: boolean): string | null;
 }
 
 export interface MomentDurationLike {
   add(value: number | MomentDurationLike, unit?: MomentUnit): MomentDurationLike;
-  subtract(
-    value: number | MomentDurationLike,
-    unit?: MomentUnit
-  ): MomentDurationLike;
+  subtract(value: number | MomentDurationLike, unit?: MomentUnit): MomentDurationLike;
   as(unit: DurationUnit): number;
   asMilliseconds(): number;
   asSeconds(): number;
@@ -194,6 +171,7 @@ const UNIT_MAP: Record<MomentUnit, DurationUnit> = {
   M: 'months',
   weeks: 'weeks',
   week: 'weeks',
+  isoWeek: 'weeks',
   w: 'weeks',
   days: 'days',
   day: 'days',
@@ -247,10 +225,7 @@ function isInputObject(value: unknown): value is InputObject {
   return !Array.isArray(value);
 }
 
-function getCachedDateTimeFormatter(
-  locale: string,
-  options: Intl.DateTimeFormatOptions
-): Intl.DateTimeFormat {
+function getCachedDateTimeFormatter(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
   const key = `${locale}|${JSON.stringify(options)}`;
   const cached = intlFormatterCache.get(key);
   if (cached) {
@@ -310,10 +285,7 @@ function parseClockDuration(value: string, format?: string): Duration | null {
   return Duration.fromObject({ hours, minutes, seconds });
 }
 
-function normalizeDurationInput(
-  input: number | MomentDurationLike | string,
-  unit?: MomentUnit | string
-): Duration {
+function normalizeDurationInput(input: number | MomentDurationLike | string, unit?: MomentUnit | string): Duration {
   if (typeof input === 'string') {
     const parsedClock = parseClockDuration(input, unit);
     if (parsedClock) {
@@ -337,11 +309,7 @@ function normalizeDurationInput(
   return Duration.fromMillis(input.valueOf());
 }
 
-function parseWithFormats(
-  value: string,
-  format: MomentFormat,
-  options?: MomentOptions
-): DateTime {
+function parseWithFormats(value: string, format: MomentFormat, options?: MomentOptions): DateTime {
   const formats = Array.isArray(format) ? format : [format];
 
   for (const fmt of formats) {
@@ -420,7 +388,7 @@ function getFieldByUnit(dt: DateTime, unit: UnitGetter): number {
     case 'Q':
       return dt.quarter;
     default:
-      return NaN;
+      return Number.NaN;
   }
 }
 
@@ -448,11 +416,7 @@ function createTimeZoneInfo(name: string): MomentTimeZoneInfo | null {
   };
 }
 
-function normalizeInput(
-  input: MomentInput,
-  options?: MomentOptions,
-  parseOptions?: ParseOptions
-): DateTime {
+function normalizeInput(input: MomentInput, options?: MomentOptions, parseOptions?: ParseOptions): DateTime {
   if (input == null) {
     return DateTime.now();
   }
@@ -534,7 +498,7 @@ function fieldAccessor(
       case 'millisecond':
         return dt.millisecond;
       default:
-        return NaN;
+        return Number.NaN;
     }
   }
 
@@ -547,32 +511,20 @@ function fieldAccessor(
   return api;
 }
 
-function createNames(
-  kind: 'month' | 'weekday',
-  width: LocaleUnit,
-  locale = DEFAULT_LOCALE
-): string[] {
+function createNames(kind: 'month' | 'weekday', width: LocaleUnit, locale = DEFAULT_LOCALE): string[] {
   const dateFmt = getCachedDateTimeFormatter(locale, {
     [kind]: width,
     timeZone: 'UTC',
   });
 
   if (kind === 'month') {
-    return Array.from({ length: 12 }, (_, i) =>
-      dateFmt.format(new Date(Date.UTC(2020, i, 1)))
-    );
+    return Array.from({ length: 12 }, (_, i) => dateFmt.format(new Date(Date.UTC(2020, i, 1))));
   }
 
-  return Array.from({ length: 7 }, (_, i) =>
-    dateFmt.format(new Date(Date.UTC(2020, 5, 7 + i)))
-  );
+  return Array.from({ length: 7 }, (_, i) => dateFmt.format(new Date(Date.UTC(2020, 5, 7 + i))));
 }
 
-function makeMoment(
-  input?: MomentInput,
-  options?: MomentOptions,
-  parseOptions?: ParseOptions
-): MomentLike {
+function makeMoment(input?: MomentInput, options?: MomentOptions, parseOptions?: ParseOptions): MomentLike {
   let dt = normalizeInput(input, options, parseOptions);
 
   const setDt = (next: DateTime): MomentLike => {
@@ -816,30 +768,35 @@ function makeMoment(
 
       return stripRelativeAffixes(relative);
     },
+
+    from(input, withoutSuffix = false) {
+      const base = normalizeInput(input);
+      const relative = dt.toRelative({
+        base,
+        style: 'long',
+        locale: dt.locale ?? undefined,
+      });
+
+      if (!withoutSuffix || relative == null) {
+        return relative ?? null;
+      }
+
+      return stripRelativeAffixes(relative);
+    },
   };
 
   return api;
 }
 
-function makeDuration(
-  input?: MomentDurationInput,
-  unit?: MomentUnit
-): MomentDurationLike {
-  let duration = normalizeDurationInput(
-    (input as number | MomentDurationLike) ?? 0,
-    unit
-  );
+function makeDuration(input?: MomentDurationInput, unit?: MomentUnit): MomentDurationLike {
+  let duration = normalizeDurationInput((input as number | MomentDurationLike) ?? 0, unit);
 
   if (input == null) {
     duration = Duration.fromMillis(0);
   } else if (typeof input === 'string') {
     const parsed = Duration.fromISO(input);
     duration = parsed.isValid ? parsed : Duration.fromMillis(0);
-  } else if (
-    typeof input === 'object' &&
-    !isMomentDurationLike(input) &&
-    !Array.isArray(input)
-  ) {
+  } else if (typeof input === 'object' && !isMomentDurationLike(input) && !Array.isArray(input)) {
     const obj: DurationLikeObject = {};
     for (const [rawUnit, value] of Object.entries(input)) {
       if (typeof value !== 'number') {
@@ -890,7 +847,7 @@ function makeDuration(
         return relative;
       }
 
-      return relative.replace(/^in\s+/, '').replace(/\s+ago$/, '');
+      return stripRelativeAffixes(relative);
     },
 
     clone() {
@@ -950,7 +907,7 @@ interface MomentFactory {
   (input?: MomentInput, format?: MomentFormat, strict?: boolean): MomentLike;
   (input?: MomentInput, strict?: boolean): MomentLike;
   ISO_8601: typeof ISO_8601;
-  utc(input?: MomentInput): MomentLike;
+  utc(input?: MomentInput, format?: MomentFormat, strict?: boolean): MomentLike;
   unix(seconds: number): MomentLike;
   duration(input?: MomentDurationInput, unit?: MomentUnit): MomentDurationLike;
   isDuration(input: unknown): input is MomentDurationLike;
@@ -966,11 +923,7 @@ interface MomentFactory {
   weekdaysMin(locale?: string): string[];
 }
 
-const moment: MomentFactory = ((
-  input?: MomentInput,
-  formatOrStrict?: MomentFormat | boolean,
-  strict?: boolean
-): MomentLike => {
+const moment: MomentFactory = ((input?: MomentInput, formatOrStrict?: MomentFormat | boolean, strict?: boolean): MomentLike => {
   const parseOptions: ParseOptions = {};
 
   if (typeof formatOrStrict === 'string' || Array.isArray(formatOrStrict)) {
@@ -996,20 +949,13 @@ moment.localeData = (locale = currentLocale) => ({
   firstDayOfWeek: () => getLocaleFirstDayOfWeek(locale),
 });
 
-moment.updateLocale = (
-  locale: string,
-  config: { parentLocale?: string; week?: { dow?: number } }
-): string => {
+moment.updateLocale = (locale: string, config: { parentLocale?: string; week?: { dow?: number } }): string => {
   const parentLocale = config.parentLocale ?? locale;
   localeWeekStart[locale] = config.week?.dow ?? getLocaleFirstDayOfWeek(parentLocale);
   return locale;
 };
 
-moment.tz = ((
-  input?: MomentInput,
-  formatOrZone?: string,
-  zoneMaybe?: string
-): MomentLike => {
+moment.tz = ((input?: MomentInput, formatOrZone?: string, zoneMaybe?: string): MomentLike => {
   if (zoneMaybe != null) {
     return makeMoment(input, { zone: zoneMaybe, locale: currentLocale }, { format: formatOrZone });
   }
@@ -1021,8 +967,8 @@ moment.tz = ((
   return makeMoment(input, { locale: currentLocale });
 }) as MomentTzFactory;
 
-moment.tz.guess = (_ignoreCache = false): string => {
-  if (_ignoreCache || cachedGuessedZone == null) {
+moment.tz.guess = (ignoreCache = false): string => {
+  if (ignoreCache || cachedGuessedZone == null) {
     cachedGuessedZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   }
 
@@ -1033,34 +979,35 @@ moment.tz.zone = (name: string): MomentTimeZoneInfo | null => createTimeZoneInfo
 
 moment.tz.names = (): string[] => getSupportedTimeZones();
 
-moment.utc = (input?: MomentInput): MomentLike =>
-  makeMoment(input, { zone: 'utc', locale: currentLocale }).utc();
+moment.utc = (input?: MomentInput, formatOrStrict?: MomentFormat | boolean, strict?: boolean): MomentLike => {
+  const parseOptions: ParseOptions = {};
+
+  if (typeof formatOrStrict === 'string' || Array.isArray(formatOrStrict)) {
+    parseOptions.format = formatOrStrict;
+    parseOptions.strict = strict ?? false;
+  } else if (typeof formatOrStrict === 'boolean') {
+    parseOptions.strict = formatOrStrict;
+  }
+
+  return makeMoment(input, { zone: 'utc', locale: currentLocale }, parseOptions).utc();
+};
 
 moment.unix = (seconds: number): MomentLike => makeMoment(seconds * 1000, { locale: currentLocale });
 
-moment.duration = (
-  input?: MomentDurationInput,
-  unit?: MomentUnit
-): MomentDurationLike => makeDuration(input, unit);
+moment.duration = (input?: MomentDurationInput, unit?: MomentUnit): MomentDurationLike => makeDuration(input, unit);
 
-moment.isDuration = (input: unknown): input is MomentDurationLike =>
-  isMomentDurationLike(input);
+moment.isDuration = (input: unknown): input is MomentDurationLike => isMomentDurationLike(input);
 
 moment.isMoment = (input: unknown): input is MomentLike => isMomentLike(input);
 
-moment.months = (locale = currentLocale): string[] =>
-  createNames('month', 'long', locale);
+moment.months = (locale = currentLocale): string[] => createNames('month', 'long', locale);
 
-moment.monthsShort = (locale = currentLocale): string[] =>
-  createNames('month', 'short', locale);
+moment.monthsShort = (locale = currentLocale): string[] => createNames('month', 'short', locale);
 
-moment.weekdays = (locale = currentLocale): string[] =>
-  createNames('weekday', 'long', locale);
+moment.weekdays = (locale = currentLocale): string[] => createNames('weekday', 'long', locale);
 
-moment.weekdaysShort = (locale = currentLocale): string[] =>
-  createNames('weekday', 'short', locale);
+moment.weekdaysShort = (locale = currentLocale): string[] => createNames('weekday', 'short', locale);
 
-moment.weekdaysMin = (locale = currentLocale): string[] =>
-  createNames('weekday', 'narrow', locale);
+moment.weekdaysMin = (locale = currentLocale): string[] => createNames('weekday', 'narrow', locale);
 
 export default moment;
